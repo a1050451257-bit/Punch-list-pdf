@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Apple SARL — Defect List PDF Importer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f5f3ee;
+    --surface: #ffffff;
+    --surface2: #f0ede6;
+    --border: #ddd9d0;
+    --border-strong: #bbb6ac;
+    --text: #1a1916;
+    --text-muted: #7a766e;
+    --text-faint: #aaa59c;
+    --accent: #2a5298;
+    --accent-bg: #eef2fb;
+    --accent-border: #b8c8ea;
+    --accent-text: #1a3a7a;
+    --success: #1a6b3c;
+    --success-bg: #eaf5ef;
+    --warning: #8a4800;
+    --warning-bg: #fdf2e0;
+    --mono: 'DM Mono', monospace;
+    --sans: 'Sora', sans-serif;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo-mark {
+    width: 36px; height: 36px;
+    background: var(--accent);
+    border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .logo-mark svg { width: 18px; height: 18px; }
+
+  .header-title { font-size: 15px; font-weight: 600; color: var(--text); }
+  .header-sub { font-size: 12px; color: var(--text-muted); font-family: var(--mono); margin-top: 1px; }
+
+  main { max-width: 960px; margin: 0 auto; padding: 32px 24px 64px; }
+
+  /* Upload Zone */
+  .upload-zone {
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--radius);
+    padding: 48px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--surface);
+    position: relative;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--accent);
+    background: var(--accent-bg);
+  }
+  .upload-zone input { display: none; }
+  .upload-icon {
+    width: 56px; height: 56px;
+    background: var(--surface2);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 16px;
+    border: 1px solid var(--border);
+    transition: all 0.2s;
+  }
+  .upload-zone:hover .upload-icon, .upload-zone.drag-over .upload-icon {
+    background: var(--accent-bg);
+    border-color: var(--accent-border);
+  }
+  .upload-icon svg { width: 24px; height: 24px; color: var(--text-muted); }
+  .upload-zone:hover .upload-icon svg, .upload-zone.drag-over .upload-icon svg { color: var(--accent); }
+  .upload-title { font-size: 15px; font-weight: 500; margin-bottom: 6px; }
+  .upload-sub { font-size: 12px; color: var(--text-muted); }
+
+  /* Status */
+  .status-wrap { margin-top: 16px; }
+  .status-text { font-size: 13px; color: var(--text-muted); font-family: var(--mono); min-height: 20px; }
+  .progress-track {
+    height: 3px; background: var(--border); border-radius: 2px;
+    margin-top: 8px; overflow: hidden; display: none;
+  }
+  .progress-fill {
+    height: 100%; background: var(--accent);
+    border-radius: 2px; transition: width 0.3s ease;
+    width: 0%;
+  }
+
+  /* Toolbar */
+  .toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px;
+    margin-top: 28px; margin-bottom: 16px;
+  }
+  .toolbar-left { display: flex; align-items: baseline; gap: 10px; }
+  .section-title { font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+  .count-badge {
+    font-size: 11px; font-family: var(--mono);
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 20px; padding: 2px 10px; color: var(--text-muted);
+  }
+  .toolbar-right { display: flex; gap: 8px; }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 500; font-family: var(--sans);
+    cursor: pointer; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text);
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .btn:hover { background: var(--surface2); border-color: var(--border-strong); }
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+  .btn-primary {
+    background: var(--accent); color: #fff;
+    border-color: var(--accent);
+  }
+  .btn-primary:hover { background: #1e3f80; border-color: #1e3f80; }
+  .btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+  /* Items */
+  .items-list { display: flex; flex-direction: column; gap: 12px; }
+
+  .item-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    animation: fadeIn 0.25s ease both;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  .item-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+  .item-num {
+    font-family: var(--mono); font-size: 12px; font-weight: 500;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 4px; padding: 2px 8px; color: var(--text-muted);
+    min-width: 32px; text-align: center;
+  }
+  .room-tag {
+    font-size: 12px; font-weight: 500;
+    background: var(--accent-bg); color: var(--accent-text);
+    border: 1px solid var(--accent-border);
+    border-radius: 4px; padding: 2px 10px;
+  }
+  .page-tag {
+    font-size: 11px; font-family: var(--mono); color: var(--text-faint);
+    margin-left: auto;
+  }
+
+  .item-body { padding: 14px 16px; }
+
+  .desc-label {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-faint);
+    margin-bottom: 5px;
+  }
+  .desc-text {
+    font-size: 13px; color: var(--text);
+    line-height: 1.6; margin-bottom: 12px;
+  }
+
+  .photos-label {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-faint);
+    margin-bottom: 8px;
+  }
+  .photos-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .photo-thumb {
+    width: 88px; height: 66px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    cursor: zoom-in;
+    transition: transform 0.15s, border-color 0.15s;
+  }
+  .photo-thumb:hover { transform: scale(1.04); border-color: var(--accent-border); }
+  .photo-placeholder {
+    width: 88px; height: 66px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; color: var(--text-faint); text-align: center;
+    line-height: 1.4;
+  }
+  .no-photos { font-size: 12px; color: var(--text-faint); font-style: italic; }
+
+  /* Empty / error states */
+  .empty-state {
+    text-align: center; padding: 48px 24px;
+    color: var(--text-muted);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); margin-top: 16px;
+  }
+  .empty-state p { font-size: 13px; margin-top: 8px; }
+
+  /* Lightbox */
+  #lightbox {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.82);
+    z-index: 9999; align-items: center; justify-content: center;
+    cursor: zoom-out;
+    backdrop-filter: blur(4px);
+  }
+  #lightbox.open { display: flex; }
+  #lightbox img {
+    max-width: 92vw; max-height: 92vh;
+    border-radius: var(--radius);
+    box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+    animation: zoomIn 0.18s ease;
+  }
+  @keyframes zoomIn { from { transform: scale(0.94); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  #lightbox-close {
+    position: fixed; top: 20px; right: 24px;
+    width: 36px; height: 36px;
+    background: rgba(255,255,255,0.15);
+    border: none; border-radius: 50%;
+    color: #fff; font-size: 20px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+  }
+  #lightbox-close:hover { background: rgba(255,255,255,0.25); }
+
+  /* Info box */
+  .info-box {
+    background: var(--warning-bg); border: 1px solid #f0c060;
+    border-radius: var(--radius-sm); padding: 10px 14px;
+    font-size: 12px; color: var(--warning); margin-top: 12px;
+    display: none;
+  }
+
+  @media (max-width: 600px) {
+    header { padding: 16px; }
+    main { padding: 20px 16px 48px; }
+    .upload-zone { padding: 32px 16px; }
+    .toolbar { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<div id="lightbox" onclick="closeLightbox()">
+  <button id="lightbox-close" onclick="closeLightbox()">✕</button>
+  <img id="lightbox-img" src="" alt="放大图片" />
+</div>
+
+<header>
+  <div class="logo-mark">
+    <svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="2" width="6" height="6" rx="1.5" fill="white" fill-opacity="0.9"/>
+      <rect x="10" y="2" width="6" height="6" rx="1.5" fill="white" fill-opacity="0.5"/>
+      <rect x="2" y="10" width="6" height="6" rx="1.5" fill="white" fill-opacity="0.5"/>
+      <rect x="10" y="10" width="6" height="6" rx="1.5" fill="white" fill-opacity="0.9"/>
+    </svg>
+  </div>
+  <div>
+    <div class="header-title">Defect List PDF Importer</div>
+    <div class="header-sub">Apple SARL Phase 5 · Completion Inspection</div>
+  </div>
+</header>
+
+<main>
+  <!-- Upload -->
+  <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+    <input type="file" id="file-input" accept="application/pdf" />
+    <div class="upload-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+    </div>
+    <div class="upload-title">点击选择或拖入 PDF 文件</div>
+    <div class="upload-sub">PDF 内容应包含：房间号 · 缺陷描述 · 照片</div>
+  </div>
+
+  <div class="status-wrap">
+    <div class="status-text" id="status-text">等待上传文件…</div>
+    <div class="progress-track" id="progress-track">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+  </div>
+
+  <div class="info-box" id="info-box">
+    ⚠ 部分页面未检测到明确的房间号标识，已按页面顺序自动分组。如需更精确解析，请确保 PDF 中每条记录包含明确的 "Room:" 或 "RM-XXX" 标识。
+  </div>
+
+  <!-- Results -->
+  <div id="results-area" style="display:none">
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <span class="section-title">解析结果</span>
+        <span class="count-badge" id="count-badge">0 条</span>
+      </div>
+      <div class="toolbar-right">
+        <button class="btn btn-primary" id="export-btn" onclick="exportXlsx()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          导出 XLSX
+        </button>
+        <button class="btn" onclick="clearAll()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+            <path d="M10 11v6"/><path d="M14 11v6"/>
+            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+          </svg>
+          清除
+        </button>
+      </div>
+    </div>
+    <div class="items-list" id="items-list"></div>
+  </div>
+
+  <div id="empty-state" class="empty-state" style="display:none">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#aaa59c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 auto 12px;">
+      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+    </svg>
+    <strong>未找到有效缺陷条目</strong>
+    <p>请确认 PDF 包含房间号、描述文字及照片，或尝试其他格式的 PDF 文件。</p>
+  </div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let parsedItems = [];
+let usedFallback = false;
+
+// Drag & Drop
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type === 'application/pdf') processPDF(f);
+  else alert('请上传 PDF 文件');
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) processPDF(fileInput.files[0]); });
+
+function setStatus(msg, pct) {
+  document.getElementById('status-text').textContent = msg;
+  const track = document.getElementById('progress-track');
+  if (pct != null) {
+    track.style.display = 'block';
+    document.getElementById('progress-fill').style.width = pct + '%';
+  } else {
+    track.style.display = 'none';
+  }
+}
+
+async function processPDF(file) {
+  parsedItems = [];
+  usedFallback = false;
+  document.getElementById('results-area').style.display = 'none';
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('info-box').style.display = 'none';
+  document.getElementById('items-list').innerHTML = '';
+
+  setStatus('正在读取 PDF…', 5);
+
+  let pdf;
+  try {
+    const ab = await file.arrayBuffer();
+    pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+  } catch(e) {
+    setStatus('PDF 读取失败：' + e.message);
+    return;
+  }
+
+  const total = pdf.numPages;
+  const allPageData = [];
+
+  for (let p = 1; p <= total; p++) {
+    setStatus(`正在处理第 ${p} / ${total} 页…`, 10 + Math.round((p / total) * 65));
+    const page = await pdf.getPage(p);
+
+    // Text extraction
+    const tc = await page.getTextContent();
+    const vp0 = page.getViewport({ scale: 1 });
+    const ph = vp0.height;
+    const textItems = tc.items
+      .filter(i => i.str && i.str.trim())
+      .map(i => ({ text: i.str.trim(), x: i.transform[4], y: ph - i.transform[5] }))
+      .sort((a, b) => a.y - b.y || a.x - b.x);
+
+    // Image extraction — embedded first
+    let images = [];
+    try {
+      const ops = await page.getOperatorList();
+      const names = [];
+      for (let i = 0; i < ops.fnArray.length; i++) {
+        if (ops.fnArray[i] === pdfjsLib.OPS.paintImageXObject) names.push(ops.argsArray[i][0]);
+      }
+      for (const name of names) {
+        try {
+          const img = await page.objs.get(name);
+          if (img && img.data && img.width > 40 && img.height > 40) {
+            const c = document.createElement('canvas');
+            c.width = img.width; c.height = img.height;
+            const ctx = c.getContext('2d');
+            const id = ctx.createImageData(img.width, img.height);
+            id.data.set(img.data);
+            ctx.putImageData(id, 0, 0);
+            images.push(c.toDataURL('image/jpeg', 0.82));
+          }
+        } catch(_) {}
+      }
+    } catch(_) {}
+
+    // Fallback: render full page
+    if (images.length === 0) {
+      const scale = 1.8;
+      const vp = page.getViewport({ scale });
+      const c = document.createElement('canvas');
+      c.width = vp.width; c.height = vp.height;
+      await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+      images.push(c.toDataURL('image/jpeg', 0.72));
+    }
+
+    allPageData.push({ pageNum: p, textItems, images });
+  }
+
+  setStatus('正在解析结构…', 78);
+  const result = parseDefects(allPageData);
+  parsedItems = result.items;
+  usedFallback = result.usedFallback;
+
+  setStatus('渲染结果…', 94);
+
+  if (parsedItems.length === 0) {
+    document.getElementById('empty-state').style.display = 'block';
+    setStatus('解析完成，未找到缺陷条目。');
+    return;
+  }
+
+  renderItems(parsedItems);
+  document.getElementById('results-area').style.display = 'block';
+  document.getElementById('count-badge').textContent = parsedItems.length + ' 条';
+  if (usedFallback) document.getElementById('info-box').style.display = 'block';
+  setStatus(`解析完成 — 共提取 ${parsedItems.length} 条记录，${total} 页`);
+}
+
+function parseDefects(allPageData) {
+  const items = [];
+  let usedFallback = false;
+
+  const roomRx = [
+    /^(?:rm|room|area|房间号?|区域|房号)\s*[:\-：]\s*(.+)/i,
+    /^([A-Z]{1,5}[-\s]?\d{2,5}[A-Z]?)\s*(?:$|[-–\s])/,
+    /^([\u4e00-\u9fff]{1,6}[栋层房室区间厅卫厨])/,
+    /^(\d{2,4}[A-Z]?)\s*(?:$|[-–\s])/,
+  ];
+  const descRx = /^(?:description|desc|缺陷|描述|问题|defect|issue)\s*[:\-：]\s*/i;
+
+  for (const { pageNum, textItems, images } of allPageData) {
+    // Group into lines by Y (5px tolerance)
+    const lines = [];
+    for (const item of textItems) {
+      const last = lines[lines.length - 1];
+      if (last && Math.abs(item.y - last.y) < 6) {
+        last.text += ' ' + item.text;
+      } else {
+        lines.push({ y: item.y, text: item.text });
+      }
+    }
+
+    let foundOnPage = false;
+    let i = 0;
+
+    while (i < lines.length) {
+      const raw = lines[i].text.trim();
+      let room = null;
+
+      for (const rx of roomRx) {
+        const m = raw.match(rx);
+        if (m) { room = (m[1] || raw).trim(); break; }
+      }
+
+      if (room) {
+        foundOnPage = true;
+        const descLines = [];
+        let j = i + 1;
+        while (j < lines.length && j < i + 10) {
+          const nxt = lines[j].text.trim();
+          let isRoom = roomRx.some(rx => rx.test(nxt));
+          if (isRoom) break;
+          const cleaned = nxt.replace(descRx, '');
+          if (cleaned.length > 1) descLines.push(cleaned);
+          j++;
+        }
+        items.push({
+          id: items.length + 1,
+          room,
+          description: descLines.join(' ').trim() || '（无描述文字）',
+          images,
+          page: pageNum
+        });
+        i = j;
+        continue;
+      }
+      i++;
+    }
+
+    if (!foundOnPage) {
+      usedFallback = true;
+      const allText = lines.map(l => l.text).join(' ').trim();
+      const words = allText.split(/\s+/);
+      items.push({
+        id: items.length + 1,
+        room: words.slice(0, 4).join(' ') || `页面 ${pageNum}`,
+        description: words.slice(4, 30).join(' ') || allText.slice(0, 150) || '（空白页面）',
+        images,
+        page: pageNum
+      });
+    }
+  }
+
+  items.forEach((r, idx) => r.id = idx + 1);
+  return { items, usedFallback };
+}
+
+function renderItems(items) {
+  const list = document.getElementById('items-list');
+  list.innerHTML = '';
+  items.forEach((item, idx) => {
+    const card = document.createElement('div');
+    card.className = 'item-card';
+    card.style.animationDelay = Math.min(idx * 40, 300) + 'ms';
+
+    const photosHtml = item.images.length
+      ? item.images.map((src, i) =>
+          `<img class="photo-thumb" src="${src}" alt="照片${i+1}" title="点击放大" onclick="openLightbox('${src}')" />`
+        ).join('')
+      : `<span class="no-photos">无图片</span>`;
+
+    card.innerHTML = `
+      <div class="item-header">
+        <span class="item-num">${item.id}</span>
+        <span class="room-tag">${escHtml(item.room)}</span>
+        <span class="page-tag">p.${item.page}</span>
+      </div>
+      <div class="item-body">
+        <div class="desc-label">缺陷描述</div>
+        <div class="desc-text">${escHtml(item.description)}</div>
+        <div class="photos-label">照片 (${item.images.length})</div>
+        <div class="photos-row">${photosHtml}</div>
+      </div>
+    `;
+    list.appendChild(card);
+  });
+}
+
+function openLightbox(src) {
+  document.getElementById('lightbox-img').src = src;
+  document.getElementById('lightbox').classList.add('open');
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+function clearAll() {
+  parsedItems = [];
+  document.getElementById('items-list').innerHTML = '';
+  document.getElementById('results-area').style.display = 'none';
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('info-box').style.display = 'none';
+  setStatus('等待上传文件…');
+  fileInput.value = '';
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function exportXlsx() {
+  if (!parsedItems.length) return;
+
+  const btn = document.getElementById('export-btn');
+  btn.disabled = true;
+  btn.textContent = '正在生成…';
+
+  try {
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Defect List Tool';
+    const ws = wb.addWorksheet('命名');
+
+    // ── Column widths (match original template) ──
+    ws.columns = [
+      { width: 8  },  // A  Item
+      { width: 24 },  // B  Area/Rm
+      { width: 38 },  // C  Description
+      { width: 48 },  // D  Photos Before
+      { width: 44 },  // E  Elevation/Layout
+      { width: 48 },  // F  Photos After
+      { width: 12 },  // G  Profession
+      { width: 15 },  // H  Responsibility
+      { width: 18 },  // I  Planned Close Date
+      { width: 11 },  // J  Status
+      { width: 14 },  // K  Inspector
+      { width: 13 },  // L  Actual Close Date
+      { width: 20 },  // M  Ranking
+      { width: 28 },  // N  Remark
+    ];
+
+    // ── Helper: style a cell ──
+    function styleCell(cell, opts = {}) {
+      cell.font = { name: 'Arial', size: opts.fontSize || 10, bold: opts.bold || false, color: { argb: opts.color || 'FF000000' } };
+      cell.alignment = { vertical: opts.valign || 'middle', horizontal: opts.align || 'left', wrapText: true };
+      if (opts.fill) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: opts.fill } };
+      if (opts.border !== false) {
+        cell.border = {
+          top:    { style: 'thin', color: { argb: 'FFB0B0B0' } },
+          left:   { style: 'thin', color: { argb: 'FFB0B0B0' } },
+          bottom: { style: 'thin', color: { argb: 'FFB0B0B0' } },
+          right:  { style: 'thin', color: { argb: 'FFB0B0B0' } },
+        };
+      }
+    }
+
+    // ── Row 1: Title (merged A1:N1) ──
+    ws.mergeCells('A1:N4');
+    const titleCell = ws.getCell('A1');
+    titleCell.value = 'APPLE SARL PHASE 5 - Completion Inspection Defect List';
+    styleCell(titleCell, { fontSize: 14, bold: true, align: 'center', valign: 'middle', fill: 'FFD9E1F2', border: false });
+    ws.getRow(1).height = 18;
+    ws.getRow(2).height = 18;
+    ws.getRow(3).height = 18;
+    ws.getRow(4).height = 18;
+
+    // ── Row 5: Column headers (top level) ──
+    ws.getRow(5).height = 22;
+    const h5 = [
+      ['A5','Item'], ['B5','Area/Rm'], ['C5','Defect Details'], ['H5','Responsibility'],
+      ['I5','Rectification Detail'],
+      ['M5','Ranking\nA: High. Must be corrected before Project Handover\nB: Medium. Negotiation before Project Handover\nC: Low. Correction After Project Handover'],
+      ['N5','Remark']
+    ];
+    h5.forEach(([addr, val]) => {
+      const c = ws.getCell(addr);
+      c.value = val;
+      styleCell(c, { bold: true, align: 'center', valign: 'middle', fill: 'FFBDD7EE' });
+    });
+    ws.mergeCells('A5:A6'); ws.mergeCells('B5:B6');
+    ws.mergeCells('C5:G5'); ws.mergeCells('H5:H6');
+    ws.mergeCells('I5:L5'); ws.mergeCells('M5:M6'); ws.mergeCells('N5:N6');
+
+    // ── Row 6: Sub-headers ──
+    ws.getRow(6).height = 160;
+    const h6 = [
+      ['C6','Description'], ['D6','Photos Taken Before Rectification'],
+      ['E6','Elevation/Layout'], ['F6','Photos Taken After Rectification'],
+      ['G6','Profession'], ['I6','Planned Close Date'],
+      ['J6','Status\nO: Open\nG: On Going\nC: Closed'],
+      ['K6','Inspector'], ['L6','Actual Close Date']
+    ];
+    h6.forEach(([addr, val]) => {
+      const c = ws.getCell(addr);
+      c.value = val;
+      styleCell(c, { bold: true, align: 'center', valign: 'middle', fill: 'FFBDD7EE' });
+    });
+
+    // ── Data rows ──
+    const ROW_OFFSET = 7; // data starts at row 7
+    const IMG_HEIGHT_PX = 180; // target image height in pixels
+    const IMG_WIDTH_PX  = 240; // target image width in pixels
+    const ROW_HEIGHT_PT = 160; // row height in points (≈ image height)
+
+    for (let idx = 0; idx < parsedItems.length; idx++) {
+      const item = parsedItems[idx];
+      const rowNum = ROW_OFFSET + idx;
+      const row = ws.getRow(rowNum);
+      row.height = ROW_HEIGHT_PT;
+
+      // A: Item number
+      const aCell = row.getCell(1);
+      aCell.value = item.id;
+      styleCell(aCell, { align: 'center', valign: 'middle' });
+
+      // B: Room
+      const bCell = row.getCell(2);
+      bCell.value = item.room;
+      styleCell(bCell, { align: 'center', valign: 'middle' });
+
+      // C: Description
+      const cCell = row.getCell(3);
+      cCell.value = item.description;
+      styleCell(cCell, { valign: 'top' });
+
+      // J: Status
+      const jCell = row.getCell(10);
+      jCell.value = 'O';
+      styleCell(jCell, { align: 'center', valign: 'middle' });
+
+      // D: Embed photos (column D = col index 4)
+      // Each image goes side by side within column D cell
+      for (let imgIdx = 0; imgIdx < item.images.length; imgIdx++) {
+        const dataUrl = item.images[imgIdx];
+        // strip "data:image/jpeg;base64," prefix
+        const base64 = dataUrl.split(',')[1];
+        if (!base64) continue;
+
+        // Determine col for this image: D for first, E for second (Elevation/Layout), F for after
+        // Per template: D = Photos Before, E = Elevation/Layout, F = Photos After
+        // We'll put all images starting at column D, overflow into E, F
+        const colLetter = ['D','E','F'][imgIdx] || 'D';
+        const colNum = { D:4, E:5, F:6 }[colLetter] || 4;
+
+        try {
+          const imgId = wb.addImage({ base64, extension: 'jpeg' });
+          ws.addImage(imgId, {
+            tl: { col: colNum - 1 + 0.05, row: rowNum - 1 + 0.05 },
+            ext: { width: IMG_WIDTH_PX, height: IMG_HEIGHT_PX },
+            editAs: 'oneCell',
+          });
+        } catch(e) {
+          // If image embedding fails, write placeholder text
+          const cell = row.getCell(colNum);
+          cell.value = `[图片 ${imgIdx+1}]`;
+          styleCell(cell, { align: 'center', valign: 'middle', color: 'FF666666' });
+        }
+      }
+
+      // Style remaining cells
+      [4,5,6,7,8,9,11,12,13,14].forEach(c => {
+        styleCell(row.getCell(c), { border: true });
+      });
+    }
+
+    // ── Note row at bottom ──
+    const noteRow = ROW_OFFSET + parsedItems.length;
+    ws.mergeCells(`A${noteRow}:N${noteRow + 2}`);
+    const noteCell = ws.getCell(`A${noteRow}`);
+    noteCell.value = 'Note：';
+    styleCell(noteCell, { valign: 'top', border: false });
+    ws.getRow(noteRow).height = 15;
+
+    // ── Generate file ──
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    saveAs(blob, 'Defect_List_Filled.xlsx');
+
+  } catch(err) {
+    alert('导出失败：' + err.message);
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 导出 XLSX`;
+  }
+}
+</script>
+</body>
+</html>
