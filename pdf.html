@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF转Excel自动处理工具</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            width: 100%;
+            max-width: 600px;
+        }
+        h1 { font-size: 22px; color: #333; margin-top: 0; }
+        p { color: #666; font-size: 14px; line-height: 1.6; }
+        .upload-area {
+            border: 2px dashed #0078d4;
+            padding: 20px;
+            text-align: center;
+            border-radius: 8px;
+            margin: 20px 0;
+            background-color: #f0f8ff;
+        }
+        .btn {
+            background-color: #0078d4;
+            color: white;
+            border: none;
+            padding: 12px 0;
+            width: 100%;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+        .btn:hover { background-color: #005a9e; }
+        .btn:disabled { background-color: #b3d4ec; cursor: not-allowed; }
+        #log {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #444;
+            white-space: pre-wrap;
+            min-height: 50px;
+            border: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>📊 PDF缺陷清单一键转Excel</h1>
+        <p>直接选择PDF文件，系统将自动识别提取**房间号、描述、图片**，并按照居中排版生成最终的Excel表格。</p>
+        
+        <div class="upload-area">
+            <input type="file" id="pdfInput" accept="application/pdf" style="width: 100%; cursor: pointer;"/>
+        </div>
+        
+        <button class="btn" id="startBtn">开始解析并生成表格</button>
+        
+        <div id="log">等待上传文件...</div>
+    </div>
+
+    <script>
+        // 配置 PDF.js 的 Worker 路径
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        const startBtn = document.getElementById('startBtn');
+        const logArea = document.getElementById('log');
+
+        startBtn.addEventListener('click', async () => {
+            const fileInput = document.getElementById('pdfInput');
+            if (!fileInput.files.length) {
+                alert('请先选择一个 PDF 文件！');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            startBtn.disabled = true;
+            logArea.innerText = "⏳ 正在加载 PDF 文件...\n";
+
+            try {
+                // 1. 读取PDF
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                const totalPages = pdf.numPages;
+                
+                // 2. 初始化 Excel
+                const workbook = new ExcelJS.Workbook();
+                const worksheet = workbook.addWorksheet('Defect List');
+                
+                // 设定表头和列宽
+                worksheet.columns = [
+                    { header: 'Item', key: 'item', width: 10 },
+                    { header: 'Area/Rm', key: 'room', width: 20 },
+                    { header: 'Description', key: 'desc', width: 40 },
+                    { header: 'Photos Taken Before Rectification', key: 'photo', width: 35 }
+                ];
+
+                // 表头样式居中
+                worksheet.getRow(1).eachCell(cell => {
+                    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                    cell.font = { bold: true };
+                });
+
+                logArea.innerText += `📄 成功加载 PDF，共 ${totalPages} 页。开始逐页提取...\n`;
+
+                for (let i = 1; i <= totalPages; i++) {
+                    const page = await pdf.getPage(i);
+                    
+                    // --- 提取文字并智能拆分 ---
+                    const textContent = await page.getTextContent();
+                    // 将本页所有文字拼接，并去除多余的空格换行
+                    let rawText = textContent.items.map(item => item.str).join('');
+                    rawText = rawText.replace(/\s+/g, ''); 
+                    
+                    let roomNum = "";
+                    let description = rawText;
+                    
+                    // 核心正则：匹配开头的英文字母和数字作为“房间号”，其余作为“描述”
+                    const match = rawText.match(/^([A-Za-z0-9]+)(.*)$/);
+                    if (match) {
+                        roomNum = match[1];
+                        description = match[2];
+                    }
+
+                    // --- 截取图片内容 ---
+                    // 采用高质量 Canvas 渲染页面以提取图片（兼容性最佳方案）
+                    const viewport = page.getViewport({ scale: 2.0 }); 
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    
+                    await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+                    // 转换为 base64 图像数据
+                    const imgBase64 = canvas.toDataURL('image/jpeg', 0.85);
+
+                    // --- 写入Excel并排版 ---
+                    const row = worksheet.addRow({
+                        item: i,
+                        room: roomNum,
+                        desc: description,
+                        photo: '' // 图片占位
+                    });
+                    
+                    // 设置该行高度以容纳图片并保证格式不拥挤
+                    row.height = 130; 
+                    
+                    // 遍历该行所有单元格，设置绝对居中
+                    row.eachCell(cell => {
+                        cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                    });
+
+                    // --- 插入图片到对应单元格 ---
+                    const imageId = workbook.addImage({
+                        base64: imgBase64,
+                        extension: 'jpeg',
+                    });
+                    
+                    // tl 代表 Top-Left 坐标。col: 3 是第4列（即D列），row: row.number - 1 是当前行
+                    worksheet.addImage(imageId, {
+                        tl: { col: 3, row: row.number - 1 },
+                        ext: { width: 140, height: 140 },
+                        editAs: 'oneCell'
+                    });
+
+                    logArea.innerText = `⏳ 正在处理... ( 第 ${i} 页 / 共 ${totalPages} 页 )`;
+                }
+
+                logArea.innerText = "✅ 数据提取完毕，正在生成 Excel 表格...\n";
+
+                // 3. 导出保存 Excel 文件
+                const buffer = await workbook.xlsx.writeBuffer();
+                const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                saveAs(blob, `缺陷清单自动生成_${new Date().getTime()}.xlsx`);
+
+                logArea.innerText = "🎉 恭喜！处理成功，Excel 文件已自动开始下载。";
+
+            } catch (error) {
+                console.error(error);
+                logArea.innerText = `❌ 发生异常: ${error.message}`;
+            } finally {
+                startBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
